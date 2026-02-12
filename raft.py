@@ -474,6 +474,7 @@ class RaftNode:
             "voted_for": self.voted_for,
             "commit_index": self.commit_index,
             "last_applied": self.last_applied,
+            "log": [e.to_dict() for e in self.log],
             "log_length": len(self.log),
             "is_failed": self.is_failed,
             "network_delay": self.network_delay,
@@ -641,7 +642,8 @@ class RaftCluster:
                 data={
                     "success": result["success"],
                     "term": result["term"],
-                    "match_index": node.match_index.get(message.from_node, 0)
+                    # Report follower's match_index (what it has replicated)
+                    "match_index": node.match_index.get(node.node_id, 0)
                 }
             ))
         
