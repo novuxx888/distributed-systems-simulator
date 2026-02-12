@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Distributed Systems Simulator | Raft Consensus</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Outfit:wght@300;400;500;600;700&display=swap');
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        :root {
+            --bg-primary: #0a0e14;
+            --bg-secondary: #111820;
+            --bg-tertiary: #1a222d;
+            --bg-card: #151c25;
+            --text-primary: #e6edf3;
+            --text-secondary: #8b949e;
+            --text-muted: #484f58;
+            --accent-blue: #58a6ff;
+            --accent-green: #3fb950;
+            --accent-red: #f85149;
+            --accent-yellow: #d29922;
+            --accent-purple: #a371f7;
+            --accent-orange: #db6d28;
+            --border-color: #30363d;
+            --leader-glow: 0 0 20px rgba(88, 166, 255, 0.5);
+            --follower-glow: 0 0 10px rgba(63, 185, 80, 0.3);
+            --candidate-glow: 0 0 15px rgba(210, 153, 34, 0.4);
+        }
+        
+        body {
+            font-family: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+        
+        .container {
+            display: grid;
+            grid-template-columns: 1fr 380px;
+            grid-template-rows: auto 1fr;
+            min-height: 100vh;
+            gap: 0;
+        }
+        
+        /* Header */
+        header {
+            grid-column: 1 / -1;
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-color);
+            padding: 16px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .logo-icon {
+            width: 36px;
+            height: 36px;
+            background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+        }
+        
+        .logo h1 {
+            font-size: 20px;
+            font-weight: 600;
+            letter-spacing: -0.5px;
+        }
+        
+        .logo span {
+            color: var(--accent-blue);
+        }
+        
+        .header-controls {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+        
+        .btn {
+            padding: 8px 16px;
+            border-radius: 6px;
+            border: 1px solid var(--border-color);
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            font-family: inherit;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        
+        .btn:hover {
+            background: var(--bg-card);
+            border-color: var(--text-muted);
+        }
+        
+        .btn-primary {
+            background: var(--accent-blue);
+            border-color: var(--accent-blue);
+            color: #fff;
+        }
+        
+        .btn-primary:hover {
+            background: #4393e6;
+            border-color: #4393e6;
+        }
+        
+        .btn-danger {
+            background: var(--accent-red);
+            border-color: var(--accent-red);
+            color: #fff;
+        }
+        
+        .btn-danger:hover {
+            background: #da3b40;
+            border-color: #da3b40;
+        }
+        
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 12px;
+            background: var(--bg-tertiary);
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--accent-green);
+            animation: pulse 2s infinite;
+        }
+        
+        .status-dot.stopped {
+            background: var(--accent-red);
+            animation: none;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        /* Main visualization area */
+        main {
+            background: var(--bg-primary);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .visualization-container {
+            width: 100%;
+            height: 100%;
+            position: relative;
+        }
+        
+        #canvas {
+            width: 100%;
+            height: 100%;
+        }
+        
+        .node-tooltip {
+            position: absolute;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 12px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s;
+            z-index: 100;
+            min-width: 180px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+        }
+        
+        .node-tooltip.visible {
+            opacity: 1;
+        }
+        
+        .tooltip-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 8px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .tooltip-state {
+            font-size: 11px;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        
+        .tooltip-state.leader {
+            background: rgba(88, 166, 255, 0.2);
+            color: var(--accent-blue);
+        }
+        
+        .tooltip-state.follower {
+            background: rgba(63, 185, 80, 0.2);
+            color: var(--accent-green);
+        }
+        
+        .tooltip-state.candidate {
+            background: rgba(210, 153, 34, 0.2);
+            color: var(--accent-yellow);
+        }
+        
+        .tooltip-state.failed {
+            background: rgba(248, 81, 73, 0.2);
+            color: var(--accent-red);
+        }
+        
+        .tooltip-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            margin: 4px 0;
+        }
+        
+        .tooltip-label {
+            color: var(--text-secondary);
+        }
+        
+        .tooltip-value {
+            font-family: 'JetBrains Mono', monospace;
+            color: var(--text-primary);
+        }
+        
+        /* Sidebar */
+        aside {
+            background: var(--bg-secondary);
+            border-left: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        
+        .sidebar-section {
+            padding: 20px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .sidebar-section h2 {
+            font-size: 13px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-secondary);
+            margin-bottom: 16px;
+        }
+        
+        /* Command Input */
+        .command-input-wrapper {
+            display: flex;
+            gap: 8px;
+        }
+        
+        .command-input {
+            flex: 1;
+            padding: 10px 14px;
+            border-radius: 6px;
+            border: 1px solid var(--border-color);
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 13px;
+        }
+        
+        .command-input:focus {
+            outline: none;
+            border-color: var(--accent-blue);
+        }
+        
+        .command-input::placeholder {
+            color: var(--text-muted);
+        }
+        
+        /* Node List */
+        .node-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        
+        .node-item {
+            background: var(--bg-tertiary);
+            border-radius: 8px;
+            padding: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: all 0.2s;
+        }
+        
+        .node-item:hover {
+            background: var(--bg-card);
+        }
+        
+        .node-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .node-state-indicator {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+        
+        .node-state-indicator.leader {
+            background: var(--accent-blue);
+            box-shadow: var(--leader-glow);
+        }
+        
+        .node-state-indicator.follower {
+            background: var(--accent-green);
+        }
+        
+        .node-state-indicator.candidate {
+            background: var(--accent-yellow);
+            animation: pulse 1s infinite;
+        }
+        
+        .node-state-indicator.failed {
+            background: var(--accent-red);
+        }
+        
+        .node-name {
+            font-weight: 500;
+            font-size: 13px;
+        }
+        
+        .node-term {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            color: var(--text-secondary);
+        }
+        
+        .node-actions {
+            display: flex;
+            gap: 4px;
+        }
+        
+        .node-btn {
+            padding: 4px 8px;
+            border-radius: 4px;
+            border: none;
+            background: transparent;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.2s;
+        }
+        
+        .node-btn:hover {
+            background: var(--bg-primary);
+            color: var(--text-primary);
+        }
+        
+        .node-btn.danger:hover {
+            color: var(--accent-red);
+        }
+        
+        /* Events Log */
+        .events-log {
+            flex: 1;
+            overflow-y: auto;
+            padding: 0 20px 20px;
+        }
+        
+        .event-item {
+            padding: 8px 12px;
+            margin-bottom: 6px;
+            background: var(--bg-tertiary);
+            border-radius: 6px;
+            font-size: 12px;
+            border-left: 3px solid var(--border-color);
+        }
+        
+        .event-item.election {
+            border-left-color: var(--accent-yellow);
+        }
+        
+        .event-item.command {
+            border-left-color: var(--accent-green);
+        }
+        
+        .event-item.fault {
+            border-left-color: var(--accent-red);
+        }
+        
+        .event-item.message {
+            border-left-color: var(--accent-blue);
+        }
+        
+        .event-time {
+            font-family: 'JetBrains Mono', monospace;
+            color: var(--text-muted);
+            font-size: 10px;
+            margin-bottom: 2px;
+        }
+        
+        .event-text {
+            color: var(--text-secondary);
+        }
+        
+        /* Add Node Form */
+        .add-node-form {
+            display: flex;
+            gap: 8px;
+        }
+        
+        .add-node-form input {
+            flex: 1;
+            padding: 8px 12px;
+            border-radius: 6px;
+            border: 1px solid var(--border-color);
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            font-size: 13px;
+        }
+        
+        .add-node-form input:focus {
+            outline: none;
+            border-color: var(--accent-blue);
+        }
+        
+        .partition-controls {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        
+        .partition-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 12px;
+            background: rgba(248, 81, 73, 0.15);
+            border: 1px solid var(--accent-red);
+            border-radius: 6px;
+            margin-top: 8px;
+            font-size: 12px;
+        }
+        
+        .partition-item span {
+            color: var(--accent-red);
+        }
+        
+        /* Stats */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+        }
+        
+        .stat-card {
+            background: var(--bg-tertiary);
+            border-radius: 8px;
+            padding: 16px;
+            text-align: center;
+        }
+        
+        .stat-card.partition {
+            border: 1px solid var(--accent-red);
+            background: rgba(248, 81, 73, 0.1);
+        }
+        
+        .stat-value {
+            font-size: 24px;
+            font-weight: 700;
+            font-family: 'JetBrains Mono', monospace;
+            color: var(--accent-blue);
+        }
+        
+        .stat-value.leader {
+            color: var(--accent-blue);
+        }
+        
+        .stat-value.partition {
+            color: var(--accent-red);
+        }
+        
+        .stat-label {
+            font-size: 11px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-top: 4px;
+        }
+        
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: var(--bg-primary);
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: var(--border-color);
+            border-radius: 3px;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--text-muted);
+        }
+        
+        /* Responsive */
+        @media (max-width: 1024px) {
+            .container {
+                grid-template-columns: 1fr;
+                grid-template-rows: auto 1fr auto;
+            }
+            
+            aside {
+                border-left: none;
+                border-top: 1px solid var(--border-color);
+                max-height: 400px;
+            }
+        }
+        
+        /* Animations */
+        @keyframes nodeAppear {
+            from {
+                transform: scale(0);
+                opacity: 0;
+            }
+            to {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+        
+        .node-animate {
+            animation: nodeAppear 0.3s ease-out;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="logo">
+                <div class="logo-icon">⚡</div>
+                <h1>Distributed <span>Systems</span> Simulator</h1>
+            </div>
+            <div class="header-controls">
+                <div class="status-indicator">
+                    <div class="status-dot" id="statusDot"></div>
+                    <span id="statusText">Running</span>
+                </div>
+                <button class="btn" id="tickBtn">
+                    <span>⏯</span> Tick
+                </button>
+                <button class="btn" id="resetBtn">
+                    <span>↺</span> Reset
+                </button>
+            </div>
+        </header>
+        
+        <main>
+            <div class="visualization-container">
+                <canvas id="canvas"></canvas>
+                <div class="node-tooltip" id="tooltip">
+                    <div class="tooltip-header">
+                        <span class="node-id" id="tooltipNodeId">node-0</span>
+                        <span class="tooltip-state leader" id="tooltipState">LEADER</span>
+                    </div>
+                    <div class="tooltip-row">
+                        <span class="tooltip-label">Term</span>
+                        <span class="tooltip-value" id="tooltipTerm">0</span>
+                    </div>
+                    <div class="tooltip-row">
+                        <span class="tooltip-label">Commit Index</span>
+                        <span class="tooltip-value" id="tooltipCommit">0</span>
+                    </div>
+                    <div class="tooltip-row">
+                        <span class="tooltip-label">Log Length</span>
+                        <span class="tooltip-value" id="tooltipLog">0</span>
+                    </div>
+                    <div class="tooltip-row">
+                        <span class="tooltip-label">Network Delay</span>
+                        <span class="tooltip-value" id="tooltipDelay">0ms</span>
+                    </div>
+                </div>
+            </div>
+        </main>
+        
+        <aside>
+            <div class="sidebar-section">
+                <h2>Cluster Stats</h2>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-value" id="statNodes">0</div>
+                        <div class="stat-label">Nodes</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="statLeader">-</div>
+                        <div class="stat-label">Leader</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="statTerm">0</div>
+                        <div class="stat-label">Current Term</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="statEvents">0</div>
+                        <div class="stat-label">Events</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="sidebar-section">
+                <h2>Execute Command</h2>
+                <div class="command-input-wrapper">
+                    <input type="text" class="command-input" id="commandInput" placeholder="Enter command (e.g., SET key value)">
+                    <button class="btn btn-primary" id="executeBtn">→</button>
+                </div>
+            </div>
+            
+            <div class="sidebar-section">
+                <h2>Nodes</h2>
+                <div class="add-node-form">
+                    <input type="text" id="newNodeId" placeholder="Node ID">
+                    <select id="regionSelect" style="padding: 8px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary); font-size: 13px;">
+                        <option value="us-east">US East</option>
+                        <option value="us-west">US West</option>
+                        <option value="eu-central">EU Central</option>
+                        <option value="asia-pacific">Asia Pacific</option>
+                    </select>
+                    <button class="btn" id="addNodeBtn">+</button>
+                </div>
+                <div class="node-list" id="nodeList" style="margin-top: 12px;">
+                </div>
+            </div>
+            
+            <div class="sidebar-section">
+                <h2>Network Partitions</h2>
+                <div class="partition-controls">
+                    <select id="partitionRegion1" style="padding: 8px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary); font-size: 13px;">
+                        <option value="us-east">US East</option>
+                        <option value="us-west">US West</option>
+                        <option value="eu-central">EU Central</option>
+                        <option value="asia-pacific">Asia Pacific</option>
+                    </select>
+                    <span style="color: var(--text-secondary);">↔</span>
+                    <select id="partitionRegion2" style="padding: 8px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary); font-size: 13px;">
+                        <option value="us-west">US West</option>
+                        <option value="us-east">US East</option>
+                        <option value="eu-central">EU Central</option>
+                        <option value="asia-pacific">Asia Pacific</option>
+                    </select>
+                    <button class="btn btn-danger" id="partitionBtn">Partition</button>
+                </div>
+                <div id="partitionList" style="margin-top: 12px;"></div>
+                <button class="btn" id="healBtn" style="margin-top: 8px; width: 100%;"> Heal All Partitions</button>
+            </div>
+            
+            <div class="events-log" id="eventsLog">
+            </div>
+        </aside>
+    </div>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
+    <script src="/static/simulator.js"></script>
+</body>
+</html>

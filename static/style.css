@@ -1,0 +1,8 @@
+/* Additional styles if needed */
+.visualization-container {
+    position: relative;
+}
+
+#canvas {
+    display: block;
+}
